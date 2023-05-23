@@ -14,6 +14,9 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use alloc::vec::Vec;
+
+
 use crate::config::MAX_APP_NUM;
 use crate::config::MAX_SYSCALL_NUM;
 use crate::loader::{get_num_app, init_app_cx};
@@ -48,6 +51,7 @@ pub struct TaskManagerInner {
     tasks: [TaskControlBlock; MAX_APP_NUM],
     /// id of current `Running` task
     current_task: usize,
+    syscalls: Vec<[u32; MAX_SYSCALL_NUM]>,
 }
 
 lazy_static! {
@@ -57,7 +61,7 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
-            syscall_times: [0; MAX_SYSCALL_NUM],
+            // syscall_times: [0; MAX_SYSCALL_NUM],
             start_time: None,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
@@ -70,6 +74,7 @@ lazy_static! {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
+                    syscalls: (0..MAX_APP_NUM).into_iter().map(|_|[0; MAX_SYSCALL_NUM]).collect(),
                 })
             },
         }
@@ -83,7 +88,7 @@ impl TaskManager {
         let cur_task = inner.tasks[inner.current_task];
 
         let stat = cur_task.task_status;
-        let sys_times = cur_task.syscall_times;
+        let sys_times = inner.syscalls[inner.current_task];
 
         let start_time = cur_task.start_time;
         let time = (get_time_us() - start_time.expect("non-initialized task")) / 1000;
@@ -94,9 +99,9 @@ impl TaskManager {
 
     /// update syscall times
     pub fn update_syscall_times(&self, sys_id: usize) {
-        let inner = self.inner.exclusive_access();
-        let mut cur_task = inner.tasks[inner.current_task];
-        cur_task.syscall_times[sys_id] += 1;
+        let mut inner = self.inner.exclusive_access();
+        let tid = inner.current_task;
+        inner.syscalls[tid][sys_id] += 1;
     }
 
     /// Run the first task in task list.
@@ -153,6 +158,11 @@ impl TaskManager {
             inner.tasks[next].task_status = TaskStatus::Running;
             if inner.tasks[next].start_time.is_none() {
                 inner.tasks[next].start_time = get_time_us().into();
+                println!(
+                    "run the next app: {} at {}",
+                    next,
+                    inner.tasks[next].start_time.unwrap()
+                );
             }
 
             inner.current_task = next;
