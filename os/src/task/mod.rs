@@ -20,9 +20,12 @@ use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
+use crate::config::MAX_SYSCALL_NUM;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
+use crate::mm::{MapPermission, VirtAddr};
+use crate::timer::get_time_us;
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -79,6 +82,7 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let next_task = &mut inner.tasks[0];
         next_task.task_status = TaskStatus::Running;
+        next_task.start_time = get_time_us().into();
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
@@ -138,6 +142,10 @@ impl TaskManager {
     fn run_next_task(&self) {
         if let Some(next) = self.find_next_task() {
             let mut inner = self.inner.exclusive_access();
+            if inner.tasks[next].start_time.is_none() {
+                inner.tasks[next].start_time = get_time_us().into();
+            }
+
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
@@ -152,6 +160,85 @@ impl TaskManager {
         } else {
             panic!("All applications completed!");
         }
+    }
+
+    /// get the components of taskinfo
+    pub fn get_task_info(&self) -> (TaskStatus, [u32; MAX_SYSCALL_NUM], usize) {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+
+        let ts = inner.tasks[current].task_status;
+        let mut times = [0; MAX_SYSCALL_NUM];
+
+        let vtimes = &inner.tasks[current].syscall_times;
+        for i in 0..MAX_SYSCALL_NUM {
+            times[i] = vtimes[i];
+        }
+
+        let running_time = (get_time_us() - inner.tasks[current].start_time.expect("start time is None")) / 1000;
+
+
+        (ts, times, running_time)
+    }
+
+    /// insert a new framed area into memset
+    pub fn insert_framed_area(&self, start_vaddr: usize, end_vaddr: usize, port: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+
+        let start_va: VirtAddr = start_vaddr.into();
+        let end_va: VirtAddr = end_vaddr.into();
+
+        let mut permission = MapPermission::U;
+        if port & 1 > 0 {
+            permission |= MapPermission::R;
+        }
+        if port & (1 << 1) > 0 {
+            permission |= MapPermission::W;
+        }
+        if port & (1 << 2) > 0 {
+            permission |= MapPermission::X;
+        }
+
+
+        inner.tasks[current].memory_set.insert_framed_area(start_va, end_va, permission);
+    }
+
+    /// remove a framed aream from memset
+    pub fn remove_framed_area(&self, start_vaddr: usize, end_vaddr: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+
+        let start_va = start_vaddr.into();
+        let end_va = end_vaddr.into();
+
+        inner.tasks[current].memory_set.remove_framed_area(start_va, end_va);
+    }
+
+    /// Check range maped
+    pub fn check_range_mapped(&self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        let inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur]
+            .memory_set
+            .check_range_mapped(start_va, end_va)
+    }
+
+    /// Check range all mapped
+    pub fn check_range_all_mapped(&self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        let inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur]
+            .memory_set
+            .check_range_all_mapped(start_va, end_va)
+    }
+
+    /// Update syscall time
+    pub fn update_syscall_times(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur]
+            .syscall_times[syscall_id] += 1;
     }
 }
 
