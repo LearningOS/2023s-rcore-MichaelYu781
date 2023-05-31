@@ -78,6 +78,53 @@ impl MemorySet {
             self.areas.remove(idx);
         }
     }
+
+
+    /// Remove framed area from memset
+    pub fn remove_framed_area(&mut self, start_va: VirtAddr, end_va: VirtAddr) {
+        let start_vpn: VirtPageNum = start_va.floor().into();
+        let end_vpn: VirtPageNum = end_va.ceil().into();
+
+        let idx = self.areas.iter().position(|map_area| {
+            map_area.vpn_range.get_start() == start_vpn && map_area.vpn_range.get_end() == end_vpn
+        }).expect("map area not exits");
+
+        self.areas.remove(idx).unmap(&mut self.page_table);
+    }
+
+    /// Check range mapped
+    pub fn check_range_mapped(&self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        let start_vpn: VirtPageNum = start_va.floor();
+        let end_vpn: VirtPageNum = end_va.ceil();
+
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            if let Some(pte) = self.page_table.find_pte(vpn) {
+                if pte.is_valid() {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// Check range all mapped
+    pub fn check_range_all_mapped(&self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        let start_vpn: VirtPageNum = start_va.floor();
+        let end_vpn: VirtPageNum = end_va.ceil();
+
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            if let Some(pte) = self.page_table.find_pte(vpn) {
+                if !pte.is_valid() {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+
     /// Add a new MapArea into this MemorySet.
     /// Assuming that there are no conflicts in the virtual address
     /// space.
