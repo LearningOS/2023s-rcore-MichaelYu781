@@ -35,6 +35,10 @@ pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
     Processor,
 };
+use crate::config::MAX_SYSCALL_NUM;
+use crate::mm::{MapPermission, VirtAddr};
+use crate::timer::get_time_us;
+
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
     // There must be an application running.
@@ -100,6 +104,83 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     let mut _unused = TaskContext::zero_init();
     schedule(&mut _unused as *mut _);
 }
+
+/// get the components of taskinfo
+pub fn get_task_info() -> (TaskStatus, [u32; MAX_SYSCALL_NUM], usize) {
+    let task = take_current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+
+    let ts = inner.task_status;
+    let mut times = [0; MAX_SYSCALL_NUM];
+
+    let vtimes = &inner.syscall_times;
+    for i in 0..MAX_SYSCALL_NUM {
+        times[i] = vtimes[i];
+    }
+
+    let running_time = (get_time_us() - inner.start_time.expect("start time is None")) / 1000;
+
+
+    (ts, times, running_time)
+}
+
+/// insert a new framed area into memset
+pub fn insert_framed_area(start_vaddr: usize, end_vaddr: usize, port: usize) {
+    let task = take_current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+
+    let start_va: VirtAddr = start_vaddr.into();
+    let end_va: VirtAddr = end_vaddr.into();
+
+    let mut permission = MapPermission::U;
+    if port & 1 > 0 {
+        permission |= MapPermission::R;
+    }
+    if port & (1 << 1) > 0 {
+        permission |= MapPermission::W;
+    }
+    if port & (1 << 2) > 0 {
+        permission |= MapPermission::X;
+    }
+
+
+    inner.memory_set.insert_framed_area(start_va, end_va, permission);
+}
+
+/// remove a framed aream from memset
+pub fn remove_framed_area(start_vaddr: usize, end_vaddr: usize) {
+    let task = take_current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+
+    let start_va = start_vaddr.into();
+    let end_va = end_vaddr.into();
+
+    inner.memory_set.remove_framed_area(start_va, end_va);
+}
+
+/// Check range maped
+pub fn check_range_mapped(start_va: VirtAddr, end_va: VirtAddr) -> bool {
+    let task = take_current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    inner.memory_set
+        .check_range_mapped(start_va, end_va)
+}
+
+/// Check range all mapped
+pub fn check_range_all_mapped(start_va: VirtAddr, end_va: VirtAddr) -> bool {
+    let task = take_current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    inner.memory_set
+        .check_range_all_mapped(start_va, end_va)
+}
+
+/// Update syscall time
+pub fn update_syscall_times(syscall_id: usize) {
+    let task = take_current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    inner.syscall_times[syscall_id] += 1;
+}
+
 
 lazy_static! {
     /// Creation of initial process
