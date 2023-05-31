@@ -112,7 +112,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 
 /// get the components of taskinfo
 pub fn get_task_info() -> (TaskStatus, [u32; MAX_SYSCALL_NUM], usize) {
-    let task = take_current_task().unwrap();
+    let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
 
     let ts = inner.task_status;
@@ -131,7 +131,7 @@ pub fn get_task_info() -> (TaskStatus, [u32; MAX_SYSCALL_NUM], usize) {
 
 /// insert a new framed area into memset
 pub fn insert_framed_area(start_vaddr: usize, end_vaddr: usize, port: usize) {
-    let task = take_current_task().unwrap();
+    let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
 
     let start_va: VirtAddr = start_vaddr.into();
@@ -154,7 +154,7 @@ pub fn insert_framed_area(start_vaddr: usize, end_vaddr: usize, port: usize) {
 
 /// remove a framed aream from memset
 pub fn remove_framed_area(start_vaddr: usize, end_vaddr: usize) {
-    let task = take_current_task().unwrap();
+    let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
 
     let start_va = start_vaddr.into();
@@ -165,7 +165,7 @@ pub fn remove_framed_area(start_vaddr: usize, end_vaddr: usize) {
 
 /// Check range maped
 pub fn check_range_mapped(start_va: VirtAddr, end_va: VirtAddr) -> bool {
-    let task = take_current_task().unwrap();
+    let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     inner.memory_set
         .check_range_mapped(start_va, end_va)
@@ -173,7 +173,7 @@ pub fn check_range_mapped(start_va: VirtAddr, end_va: VirtAddr) -> bool {
 
 /// Check range all mapped
 pub fn check_range_all_mapped(start_va: VirtAddr, end_va: VirtAddr) -> bool {
-    let task = take_current_task().unwrap();
+    let task = current_task().unwrap();
     let inner = task.inner_exclusive_access();
     inner.memory_set
         .check_range_all_mapped(start_va, end_va)
@@ -181,7 +181,7 @@ pub fn check_range_all_mapped(start_va: VirtAddr, end_va: VirtAddr) -> bool {
 
 /// Update syscall time
 pub fn update_syscall_times(syscall_id: usize) {
-    let task = take_current_task().unwrap();
+    let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
     inner.syscall_times[syscall_id] += 1;
 }

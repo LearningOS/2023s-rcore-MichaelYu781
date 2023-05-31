@@ -119,7 +119,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     // ---- release current PCB automatically
 }
 
-fn set_value(dst: Vec<&mut [u8]>, src: *const usize, len: usize) {
+fn set_value(dst: Vec<&mut [u8]>, src: *const u8, len: usize) {
     let mut ptr = src;
 
     assert_eq!(dst.iter().map(|b| b.len()).sum::<usize>(), len);
@@ -151,7 +151,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
         usec: us % 1_000_000,
     };
 
-    set_value(buffer, &tts as *const TimeVal as *const usize, mem::size_of::<TimeVal>());
+    set_value(buffer, &tts as *const TimeVal as *const u8, mem::size_of::<TimeVal>());
 
     0
 }
@@ -174,7 +174,7 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
         time: running_time,
     };
 
-    set_value(buffer, &tti as *const TaskInfo as *const usize, mem::size_of::<TaskInfo>());
+    set_value(buffer, &tti as *const TaskInfo as *const u8, mem::size_of::<TaskInfo>());
 
     0
 }
@@ -257,7 +257,6 @@ pub fn sys_spawn(path: *const u8) -> isize {
     } else {
         -1
     }
-
 }
 
 // YOUR JOB: Set task priority.
