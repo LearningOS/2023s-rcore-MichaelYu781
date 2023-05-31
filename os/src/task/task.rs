@@ -9,6 +9,41 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
+use crate::task::{BIG_STRIDE, DEFAULT_PRIOR};
+
+use core::cmp::Ordering;
+
+
+/// Stride
+#[derive(PartialEq, Copy, Clone)]
+pub struct Stride(u64);
+
+
+impl PartialOrd for Stride {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.0 < other.0 {
+            if other.0 - self.0 > BIG_STRIDE / 2 {
+                Some(Ordering::Less)
+            } else {
+                Some(Ordering::Greater)
+            }
+        } else {
+            if self.0 - other.0 > BIG_STRIDE / 2 {
+                Some(Ordering::Greater)
+            } else {
+                Some(Ordering::Less)
+            }
+        }
+    }
+}
+
+impl Eq for Stride {}
+
+impl Ord for Stride{
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
 
 /// Task control block structure
 ///
@@ -75,6 +110,12 @@ pub struct TaskControlBlockInner {
 
     /// Start time
     pub start_time: Option<usize>,
+
+    /// Stride
+    pub stride: Stride,
+
+    /// Priority
+    pub priority: u64,
 }
 
 impl TaskControlBlockInner {
@@ -127,6 +168,8 @@ impl TaskControlBlock {
                     program_brk: user_sp,
                     syscall_times: vec![0; 500],
                     start_time: None,
+                    stride: Stride(0),
+                    priority: DEFAULT_PRIOR,
                 })
             },
         };
@@ -202,6 +245,8 @@ impl TaskControlBlock {
                     program_brk: parent_inner.program_brk,
                     syscall_times: vec![0; 500],
                     start_time: None,
+                    stride: Stride(0),
+                    priority: DEFAULT_PRIOR,
                 })
             },
         });
@@ -246,6 +291,12 @@ impl TaskControlBlock {
         } else {
             None
         }
+    }
+
+    /// update stride
+    pub fn update_stride(&self) {
+        let mut inner = self.inner_exclusive_access();
+        inner.stride.0 += BIG_STRIDE / inner.priority;
     }
 }
 

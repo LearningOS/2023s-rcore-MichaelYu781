@@ -39,6 +39,11 @@ use crate::config::MAX_SYSCALL_NUM;
 use crate::mm::{MapPermission, VirtAddr};
 use crate::timer::get_time_us;
 
+/// The Big Stride
+pub const BIG_STRIDE: u64 = 1 << 40;
+/// The default priority
+pub const DEFAULT_PRIOR: u64 = 16;
+
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
     // There must be an application running.
